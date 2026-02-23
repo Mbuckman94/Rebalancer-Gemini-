@@ -7,7 +7,7 @@ export interface Position {
   quantity: number;
   price: number;
   currentValue: number;
-  yield: number;
+  yield: number | string;
   targetPct: number;
   roundingMode: RoundingMode;
   // AI Classification fields

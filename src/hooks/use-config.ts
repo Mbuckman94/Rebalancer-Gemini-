@@ -1,14 +1,12 @@
 import { useState, useEffect } from 'react';
 
 export interface AppConfig {
-  finnhubKey: string;
   tiingoKey: string;
   logodevKey: string;
   geminiKey: string;
 }
 
 const DEFAULT_CONFIG: AppConfig = {
-  finnhubKey: '',
   tiingoKey: '',
   logodevKey: '',
   geminiKey: '', // Will fallback to env var if empty

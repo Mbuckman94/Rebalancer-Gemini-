@@ -154,7 +154,7 @@ export const RebalancerTable: React.FC<RebalancerTableProps> = ({
                     ${marketValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                   <td className="px-4 py-3 text-right font-mono text-zinc-400">
-                    {pos.yield.toFixed(2)}%
+                    {typeof pos.yield === 'number' ? `${pos.yield.toFixed(2)}%` : pos.yield}
                   </td>
                   <td className="px-4 py-3 text-right font-mono text-zinc-400">
                     {weight.toFixed(2)}%

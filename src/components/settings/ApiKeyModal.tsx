@@ -60,7 +60,6 @@ export function ApiKeyModal({ isOpen, onClose }: ApiKeyModalProps) {
         </p>
         
         <div className="space-y-4">
-          {renderInput("Finnhub API Key", "finnhubKey", "Enter Finnhub key...")}
           {renderInput("Tiingo API Key", "tiingoKey", "Enter Tiingo key...")}
           {renderInput("Logo.dev API Key", "logodevKey", "Enter Logo.dev key...")}
           

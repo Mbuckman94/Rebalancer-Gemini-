@@ -63,47 +63,7 @@ export interface MarketData {
   symbol: string;
   name: string;
   price: number;
-  yield: number;
-}
-
-const TIINGO_API_KEY = process.env.Tiingo_API_Key;
-
-async function fetchTiingoData(symbol: string): Promise<{ name?: string, description?: string, yield?: number }> {
-  if (!TIINGO_API_KEY) return {};
-  
-  try {
-    const oneYearAgo = new Date();
-    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-    const dateStr = oneYearAgo.toISOString().split('T')[0];
-
-    // Fetch Meta and Prices (for yield calculation) in parallel
-    const [metaRes, pricesRes] = await Promise.all([
-      fetch(`https://api.tiingo.com/tiingo/daily/${symbol}?token=${TIINGO_API_KEY}`),
-      fetch(`https://api.tiingo.com/tiingo/daily/${symbol}/prices?startDate=${dateStr}&columns=divCash,close&token=${TIINGO_API_KEY}`)
-    ]);
-
-    const meta = metaRes.ok ? await metaRes.json() : {};
-    const prices = pricesRes.ok ? await pricesRes.json() : [];
-
-    let calculatedYield = 0;
-    if (Array.isArray(prices) && prices.length > 0) {
-      const totalDivs = prices.reduce((sum: number, day: any) => sum + (day.divCash || 0), 0);
-      // Use the most recent close price from Tiingo for yield calculation to be consistent
-      const lastPrice = prices[prices.length - 1].close;
-      if (lastPrice > 0) {
-        calculatedYield = (totalDivs / lastPrice) * 100;
-      }
-    }
-
-    return { 
-      name: meta.name, 
-      description: meta.description,
-      yield: calculatedYield > 0 ? calculatedYield : undefined
-    };
-  } catch (e) {
-    console.warn(`Tiingo fetch failed for ${symbol}`, e);
-    return {};
-  }
+  yield: number | string;
 }
 
 export async function fetchMarketData(symbol: string): Promise<MarketData> {
@@ -123,22 +83,22 @@ export async function fetchMarketData(symbol: string): Promise<MarketData> {
     ]);
 
     let name = profile?.name;
-    let dividendYield = metric?.metric?.dividendYieldIndicatedAnnual || metric?.metric?.dividendYield5Y;
+    let dividendYield = metric?.metric?.currentDividendYieldTTM || metric?.metric?.dividendYieldIndicatedAnnual;
 
-    // ETF Fallback Logic:
-    // If Finnhub returns no name or no yield, try Tiingo
-    // We check for undefined/null yield, or 0 if it's a known dividend payer (but 0 is hard to distinguish from no-yield stock)
-    // For now, if name is missing OR yield is missing/0, we check Tiingo. 
-    // Note: Some stocks truly have 0 yield. But if Finnhub fails for ETFs, it often returns null/undefined.
-    if (!name || name.trim() === '' || dividendYield === undefined || dividendYield === null) {
-       const tiingo = await fetchTiingoData(symbol);
-       
-       if (!name || name.trim() === '') {
-         name = tiingo.name;
-       }
-       
-       if (dividendYield === undefined || dividendYield === null) {
-         dividendYield = tiingo.yield;
+    // ETF Fallback Logic for Name:
+    // If Finnhub returns no name (common for ETFs in profile2), try Finnhub Search
+    if (!name || name.trim() === '') {
+       try {
+         const searchRes = await fetchWithRetry(`/search?q=${symbol}`);
+         if (searchRes && searchRes.result && searchRes.result.length > 0) {
+            // Find exact match if possible, otherwise take the first
+            const match = searchRes.result.find((r: any) => r.symbol === symbol) || searchRes.result[0];
+            if (match) {
+                name = match.description;
+            }
+         }
+       } catch (e) {
+         console.warn(`Finnhub search fallback failed for ${symbol}`, e);
        }
     }
 
@@ -146,12 +106,21 @@ export async function fetchMarketData(symbol: string): Promise<MarketData> {
     if (!name || name.trim() === '') {
       name = symbol; // Fallback to symbol if name is still missing
     }
+    
+    // Graceful degradation for Yield
+    // If yield is undefined or null, set to "N/A"
+    let finalYield: number | string = 0;
+    if (dividendYield !== undefined && dividendYield !== null) {
+        finalYield = dividendYield;
+    } else {
+        finalYield = "N/A";
+    }
 
     const data: MarketData = {
       symbol,
       name: name,
       price: quote?.c || 0,
-      yield: dividendYield || 0 // Ensure 0 if undefined/null
+      yield: finalYield
     };
 
     quoteCache.set(cacheKey, data);
@@ -163,7 +132,7 @@ export async function fetchMarketData(symbol: string): Promise<MarketData> {
       symbol,
       name: symbol,
       price: 0,
-      yield: 0
+      yield: "N/A"
     };
   }
 }
